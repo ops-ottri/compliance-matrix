@@ -1,0 +1,34 @@
+[
+  {
+    "jurisdiction": "FL",
+    "regulations": [
+      {
+        "regulation": "Florida Loan Broker Act",
+        "category": "Consumer Lending",
+        "status": "Green",
+        "owner": "Legal",
+        "summary": "Covers loan broker registration requirements",
+        "impact": "Medium",
+        "notes": "No licensing if no direct fees charged to consumers",
+        "controls": "Verify disclosures; update ToS",
+        "monitoring": "Annual compliance review"
+      }
+    ]
+  },
+  {
+    "jurisdiction": "NY",
+    "regulations": [
+      {
+        "regulation": "NY DFS Licensing",
+        "category": "Consumer Lending",
+        "status": "Amber",
+        "owner": "Legal",
+        "summary": "Strict oversight by DFS",
+        "impact": "High",
+        "notes": "May require license depending on activity",
+        "controls": "Legal counsel review",
+        "monitoring": "Ongoing"
+      }
+    ]
+  }
+]

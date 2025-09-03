@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Compliance Dashboard</title>
+  <meta name="description" content="Compliance dashboard loading data from compliance.json" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .table-wrap { overflow-x: auto; }
+    .fade-enter { opacity: 0; transform: translateY(6px); }
+    .fade-enter-active { opacity: 1; transform: translateY(0); transition: opacity .2s ease, transform .2s ease; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+  <main class="max-w-6xl mx-auto p-6">
+    <header class="mb-6">
+      <h1 class="text-3xl font-bold tracking-tight">Compliance Dashboard</h1>
+      <p class="text-gray-600 mt-2">Data is loaded from <code>./compliance.json</code>. Click a row for details.</p>
+    </header>
+
+    <!-- Status -->
+    <div id="status" class="mb-4 text-sm text-gray-600">Loading data…</div>
+
+    <!-- Summary cards -->
+    <section aria-label="Summary" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-xs uppercase text-gray-500">Jurisdictions</div>
+        <div id="cardJurisdictions" class="text-2xl font-semibold mt-1">—</div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-xs uppercase text-gray-500">Total Regulations</div>
+        <div id="cardRegs" class="text-2xl font-semibold mt-1">—</div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-xs uppercase text-gray-500">Green</div>
+        <div id="cardGreen" class="text-2xl font-semibold mt-1">—</div>
+      </div>
+      <div class="bg-white rounded-xl shadow p-4">
+        <div class="text-xs uppercase text-gray-500">Amber / Red</div>
+        <div id="cardRisk" class="text-2xl font-semibold mt-1">—</div>
+      </div>
+    </section>
+
+    <!-- Table -->
+    <div class="table-wrap bg-white rounded-xl shadow">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-100">
+          <tr>
+            <th scope="col" class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider">Jurisdiction</th>
+            <th scope="col" class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider"># of Regulations</th>
+            <th scope="col" class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider">Statuses</th>
+          </tr>
+        </thead>
+        <tbody id="tbody" class="divide-y divide-gray-200"></tbody>
+      </table>
+    </div>
+
+    <!-- Modal -->
+    <div id="modal" class="fixed inset-0 hidden items-center justify-center bg-black/40 p-4" aria-hidden="true" role="dialog" aria-modal="true">
+      <div class="bg-white rounded-2xl shadow-xl max-w-3xl w-full fade-enter">
+        <div class="flex items-center justify-between border-b px-4 py-3">
+          <h2 id="modalTitle" class="text-xl font-semibold">Details</h2>
+          <button id="closeModal" aria-label="Close modal" class="text-2xl leading-none text-gray-400 hover:text-gray-600">&times;</button>
+        </div>
+        <div id="modalBody" class="p-4 space-y-3"></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // ------- Utils -------
+    const $ = (id) => document.getElementById(id);
+
+    function countStatuses(regs) {
+      const counts = { Green: 0, Amber: 0, Red: 0, Other: 0 };
+      (regs || []).forEach(r => {
+        const s = (r.status || '').trim();
+        if (s === 'Green') counts.Green++;
+        else if (s === 'Amber') counts.Amber++;
+        else if (s === 'Red') counts.Red++;
+        else counts.Other++;
+      });
+      return counts;
+    }
+
+    function pill(label, count) {
+      if (!count) return '';
+      let cls = 'bg-gray-100 text-gray-800';
+      if (label === 'Green') cls = 'bg-green-100 text-green-800';
+      if (label === 'Amber') cls = 'bg-yellow-100 text-yellow-800';
+      if (label === 'Red') cls = 'bg-red-100 text-red-800';
+      return `<span class="inline-block mr-2 px-2 py-1 text-xs font-semibold rounded-full ${cls}">${count} ${label}</span>`;
+    }
+
+    function el(tag, className, text) {
+      const e = document.createElement(tag);
+      if (className) e.className = className;
+      if (text != null) e.textContent = text;
+      return e;
+    }
+
+    // ------- Modal -------
+    let lastFocused = null;
+    const modal = $('modal');
+    const modalTitle = $('modalTitle');
+    const modalBody = $('modalBody');
+
+    function openModal(title, regs) {
+      modalTitle.textContent = title;
+      modalBody.innerHTML = '';
+
+      regs.forEach(r => {
+        const card = el('div', 'border rounded-xl p-4');
+        const top = el('div', 'flex items-center justify-between mb-2');
+        const name = el('div', 'font-semibold', r.regulation || 'Untitled regulation');
+
+        // Status pill (safe text only)
+        const s = (r.status || '').trim();
+        const pillSpan = el('span', 'px-2 py-1 text-xs font-semibold rounded-full');
+        pillSpan.textContent = s || '—';
+        if (s === 'Green') pillSpan.classList.add('bg-green-100','text-green-800');
+        else if (s === 'Amber') pillSpan.classList.add('bg-yellow-100','text-yellow-800');
+        else if (s === 'Red') pillSpan.classList.add('bg-red-100','text-red-800');
+        else pillSpan.classList.add('bg-gray-100','text-gray-800');
+
+        top.append(name, pillSpan);
+        card.appendChild(top);
+
+        const grid = el('div', 'grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm');
+        const kv = (label, value) => {
+          const wrap = el('div');
+          const strong = el('strong', 'font-semibold text-gray-600 mr-1', label + ':');
+          const span = el('span', null, value || '—');
+          wrap.append(strong, span);
+          return wrap;
+        };
+        grid.append(
+          kv('Category', r.category),
+          kv('Owner', r.owner),
+          kv('Impact', r.impact),
+          kv('Summary', r.summary),
+          kv('Notes', r.notes),
+          kv('Controls', r.controls),
+          kv('Monitoring', r.monitoring)
+        );
+        card.appendChild(grid);
+        modalBody.appendChild(card);
+      });
+
+      lastFocused = document.activeElement;
+      modal.classList.remove('hidden');
+      modal.setAttribute('aria-hidden', 'false');
+
+      // simple enter animation
+      const box = modal.querySelector('.fade-enter');
+      box && requestAnimationFrame(() => box.classList.add('fade-enter-active'));
+
+      $('closeModal').focus();
+    }
+
+    function closeModal() {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+      if (lastFocused) lastFocused.focus();
+    }
+
+    $('closeModal').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal.getAttribute('aria-hidden') === 'false') closeModal();
+    });
+
+    // ------- Load & render -------
+    async function load() {
+      const status = $('status');
+      try {
+        const res = await fetch('./compliance.json'); // IMPORTANT: same folder
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+
+        // Summary
+        const jurisdictions = data.length;
+        const totalRegs = data.reduce((acc, j) => acc + (j.regulations?.length || 0), 0);
+        const allRegs = data.flatMap(j => j.regulations || []);
+        const c = countStatuses(allRegs);
+        $('cardJurisdictions').textContent = jurisdictions;
+        $('cardRegs').textContent = totalRegs;
+        $('cardGreen').textContent = c.Green;
+        $('cardRisk').textContent = (c.Amber + c.Red);
+
+        // Table
+        const tbody = $('tbody');
+        tbody.innerHTML = '';
+        data.forEach(item => {
+          const tr = document.createElement('tr');
+          tr.className = 'hover:bg-gray-50 cursor-pointer';
+          tr.tabIndex = 0;
+          tr.setAttribute('role', 'button');
+          tr.setAttribute('aria-label', `View ${item.jurisdiction || 'this jurisdiction'} details`);
+
+          const td1 = el('td', 'px-4 py-3 font-semibold text-[#3A506B]', item.jurisdiction || '—');
+          const td2 = el('td', 'px-4 py-3', String(item.regulations?.length || 0));
+          const td3 = el('td', 'px-4 py-3');
+
+          const counts = countStatuses(item.regulations || []);
+          td3.innerHTML = [
+            pill('Green', counts.Green),
+            pill('Amber', counts.Amber),
+            pill('Red', counts.Red),
+            pill('Other', counts.Other)
+          ].join('');
+
+          tr.addEventListener('click', () => openModal(item.jurisdiction || 'Details', item.regulations || []));
+          tr.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModal(item.jurisdiction || 'Details', item.regulations || []); }
+          });
+
+          tr.append(td1, td2, td3);
+          tbody.appendChild(tr);
+        });
+
+        status.textContent = 'Loaded ' + jurisdictions + ' jurisdictions.';
+      } catch (e) {
+        $('status').textContent = 'Failed to load compliance.json: ' + e.message;
+        console.error(e);
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
